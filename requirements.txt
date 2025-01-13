@@ -1,0 +1,11 @@
+gdown
+pandas
+numpy
+sympy
+umap-learn
+scikit-learn
+pytorch-tabnet
+torch
+torchattacks
+matplotlib
+deepod
