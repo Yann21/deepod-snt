@@ -80,6 +80,7 @@ class TabNetWrapper(Module):
   Wrapper to make TabNet compatible with Torchattacks.
   Directly uses the TabNet PyTorch network to maintain gradients.
   """
+
   def __init__(self, tabnet_model):
     super(TabNetWrapper, self).__init__()
     self.tabnet_network = tabnet_model.network  # Direct access to PyTorch network
@@ -131,6 +132,7 @@ def generate_pgd_attack(X, y):
   print(f"Requires Grad: {X_adv.requires_grad}")
   return X_adv
 
+
 X_adv_test = generate_pgd_attack(X_test, y_test)
 X_adv_train = generate_pgd_attack(X_train, y_train)
 
@@ -152,7 +154,7 @@ print("\nClassification Report on Adversarial Data:")
 print(classification_report(y_test, y_adv_pred))
 
 
-#%% Take adversarial examples and split into valid and invalid
+# %% Take adversarial examples and split into valid and invalid
 X_adv_test_np = X_adv_test.cpu().detach().numpy()
 X_adv_train_np = X_adv_train.cpu().detach().numpy()
 
@@ -164,8 +166,12 @@ is_valid = evaluate_constraints(pd.DataFrame(X_adv_train_np, columns=X.columns),
 X_adv_train_valid = X_adv_train_np[is_valid]  # Clean
 X_adv_train_invalid = X_adv_train_np[~is_valid]  # Dirty
 
-print(f"Out of all the train adversarial attacks {X_adv_train_valid.shape[0]} are valid and {X_adv_train_invalid.shape[0]} are invalid")
-print(f"Out of all the test adversarial attacks {X_adv_test_valid.shape[0]} are valid and {X_adv_test_invalid.shape[0]} are invalid")
+print(
+  f"Out of all the train adversarial attacks {X_adv_train_valid.shape[0]} are valid and {X_adv_train_invalid.shape[0]} are invalid"
+)
+print(
+  f"Out of all the test adversarial attacks {X_adv_test_valid.shape[0]} are valid and {X_adv_test_invalid.shape[0]} are invalid"
+)
 
 
 # %% DeepOD step
@@ -174,7 +180,7 @@ is_valid = evaluate_constraints(pd.DataFrame(X_train, columns=X.columns), cnf)
 X_train_valid = X_train[is_valid]
 X_train_invalid = X_train[~is_valid]
 X_train_valid_combined = np.vstack([X_train_valid, X_adv_train_valid])
-X_train_od = X_train_valid_combined # Synonyms, btw
+X_train_od = X_train_valid_combined  # Synonyms, btw
 
 is_valid = evaluate_constraints(pd.DataFrame(X_test, columns=X.columns), cnf)
 X_test_valid = X_test[is_valid]
@@ -197,13 +203,15 @@ models = [
   SLAD(),
 ]
 
+
 def anomaly_hist(anomaly_scores):
   fig, ax = plt.subplots()
-  ax.hist(anomaly_scores, bins=30, color='blue', edgecolor='black')
+  ax.hist(anomaly_scores, bins=30, color="blue", edgecolor="black")
   ax.set_title("Histogram of Anomaly Scores")
   ax.set_xlabel("Anomaly Score")
   ax.set_ylabel("Frequency")
   return fig
+
 
 # Combine clean and unconstrained adversarial data
 X_test_invalid_combined = np.vstack([X_test_invalid, X_adv_test_invalid])
@@ -223,10 +231,12 @@ for model in models:
   roc_auc = roc_auc_score(y_ctr, anomaly_scores)
   print(f"ROC AUC: {roc_auc:.4f}")
 
-  print(f"Exp: e53.1_deepod_6, Classifier: tabnet, Model: {model.__class__.__name__}, Dataset: {dataset}; Metrics: ROC AUC: {roc_auc:.4f}")
+  print(
+    f"Exp: e53.1_deepod_6, Classifier: tabnet, Model: {model.__class__.__name__}, Dataset: {dataset}; Metrics: ROC AUC: {roc_auc:.4f}"
+  )
 
 
-#%% Debug
+# %% Debug
 from umap import UMAP
 
 umap = UMAP(n_components=2)
@@ -244,13 +254,13 @@ X_combined_umap = umap.fit_transform(X_test_od)
 
 # then color based on whether it's adversarial or not
 y_combined = np.zeros(X_test_od.shape[0])
-y_combined[X_train_od.shape[0]:] = 1
+y_combined[X_train_od.shape[0] :] = 1
 color = np.where(y_combined == 0, "blue", "red")
 plt.scatter(X_combined_umap[:, 0], X_combined_umap[:, 1], c=color, s=0.3)
 plt.legend()
 
 
-#%%
+# %%
 from matplotlib import cm
 from matplotlib.colors import Normalize
 
@@ -264,15 +274,16 @@ anomaly_colors = cm.viridis(norm(anomaly_scores))  # Usar colormap 'viridis'
 # Crear la visualización con colores basados en anomaly_scores
 plt.figure(figsize=(10, 7))
 plt.scatter(
-    X_combined_umap[:, 0],
-    X_combined_umap[:, 1],
-    c=anomaly_colors,  # Colorear en base a anomaly_scores
-    s=5,
-    label="Datos Combinados"
+  X_combined_umap[:, 0],
+  X_combined_umap[:, 1],
+  c=anomaly_colors,  # Colorear en base a anomaly_scores
+  s=5,
+  label="Datos Combinados",
 )
-plt.colorbar(cm.ScalarMappable(norm=norm, cmap="viridis"), label="Puntuación de Anomalía")
+plt.colorbar(
+  cm.ScalarMappable(norm=norm, cmap="viridis"), label="Puntuación de Anomalía"
+)
 plt.title("Proyección UMAP con Puntuaciones de Anomalía")
 plt.xlabel("UMAP Dim 1")
 plt.ylabel("UMAP Dim 2")
 plt.show()
-
