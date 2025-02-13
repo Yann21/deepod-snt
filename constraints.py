@@ -6,6 +6,16 @@ from typing import Dict
 import sympy as sp
 from pathlib import Path
 from tqdm import tqdm
+from typing import Union
+import numpy as np
+import pandas as pd
+import sympy as sp
+from sympy.core.symbol import Symbol
+from sympy.core.relational import Relational
+from typing import List
+import sympy as sp
+from time import perf_counter
+
 
 class CNF:
   def __init__(self, clauses: List[sp.Expr]):
@@ -23,137 +33,54 @@ class CNF:
   def __iter__(self):
     return iter(self.clauses)
 
+  def free_symbols(self) -> set:
+    symbols: List[set] = [clause.free_symbols for clause in self.clauses]
+    return set.union(*symbols)
 
 
-def find_constraint_closures(cnf: CNF) -> Dict[sp.Symbol, List[sp.Symbol]]:
+def get_variables_from_clauses(clauses: List[Relational]) -> List[Symbol]:
+  """Get all the variables in a list of clauses. Same function in CNF."""
+  return list(set().union(*[clause.free_symbols for clause in clauses]))
+
+
+def _get_violating_features_from_clause_violation(
+  row: pd.Series, cnf: CNF
+) -> List[Symbol]:
+  """Map the clauses that are violated to the features that violate each clause.
+
+  >>> print(cnf[0])
+  x1 & x2
+  >>> print(cnf[1])
+  x4 & x5
+  >>> clause_violation = pd.Series([1, 1, 0, 0, 0])
+  >>> assert len(clause_violation) == 7
+  >>> get_violating_features_from_clause_violation(clause_violation, cnf)
+  [x1, x2, x4, x5]
   """
-  From a CNF expression, find all variable closures based on their connections through clauses.
-
-  Args:
-  cnf (CNF): CNF object containing a list of clauses.
-
-  Returns:
-  Dict[sp.Symbol, List[sp.Symbol]]: Dictionary mapping each symbol to a list of all symbols in its closure.
-
-  Example:
-  >>> cnf = CNF([a & b, b & ~c])
-  >>> find_constraint_closures(cnf)
-  {a: [a, b, c], b: [a, b, c], c: [a, b, c]}
-  """
-  assert isinstance(cnf, CNF)
+  violating_clauses_idx: List[int] = list(np.where(row)[0])
   clauses = cnf.clauses
-  associations = {}
+  violating_clauses = np.array(clauses)[violating_clauses_idx]
 
-  def find_group(symbol, visited):
-    """Find the full group for a symbol, avoiding cycles."""
-    if symbol in visited:
-      return set()
-    visited.add(symbol)
-    group = set(associations[symbol])
-    for sym in associations[symbol]:
-      group.update(find_group(sym, visited))
-    return group
-
-  # Initialize the associations
-  for clause in clauses:
-    symbols = list(clause.atoms(sp.Symbol))
-    for sym in symbols:
-      if sym not in associations:
-        associations[sym] = set()
-      associations[sym].update(symbols)
-
-  # Resolve full associations
-  full_associations = {}
-  for sym in associations:
-    full_group = find_group(sym, set())
-    full_associations[sym] = sorted(list(full_group), key=lambda x: str(x))
-
-  return full_associations
+  return get_variables_from_clauses(violating_clauses)
 
 
-def expand_constraints_to_features(
-  constraints_violation_matrix: np.ndarray,
-  cnf: CNF,
-  closures: Dict[sp.Symbol, List[sp.Symbol]],
-) -> np.ndarray:
-  """
-  Transform the constraints matrix into a feature matrix based on the constraint closures.
+def get_feature_violation(df, cnf: CNF):
+  all_symbols = cnf.free_symbols()
 
-  Args:
-    constraints_violation_matrix (np.ndarray): The original constraints violation matrix (rows, constraints).
-    cnf (CNF): CNF object containing a list of clauses.
-    closures (Dict[sp.Symbol, List[sp.Symbol]]): The closure mapping for each feature.
+  def find_violating_features(row):
+    """Find the features that violate and place them in a list with all the symbols in the CNF."""
+    violating_features = _get_violating_features_from_clause_violation(row, cnf)
+    return pd.Series(
+      [symbol in violating_features for symbol in all_symbols], index=all_symbols
+    )
 
-  Returns:
-    np.ndarray: Transformed matrix (rows, features).
-  """
-  assert isinstance(cnf, CNF)
-  assert isinstance(constraints_violation_matrix, np.ndarray)
-  clauses = cnf.clauses
-
-  num_rows, num_constraints = constraints_violation_matrix.shape
-  feature_symbols = list(set().union(*closures.values()))
-  feature_indices = {sym: idx for idx, sym in enumerate(feature_symbols)}
-  num_features = len(feature_symbols)
-  feature_matrix = np.zeros((num_rows, num_features), dtype=int)
-
-  for row in range(num_rows):
-    for constraint_idx, clause in enumerate(clauses):
-      if constraints_violation_matrix[row, constraint_idx]:
-        involved_symbols = list(clause.atoms(sp.Symbol))
-        for symbol in involved_symbols:
-          for closure_symbol in closures[symbol]:
-            feature_matrix[row, feature_indices[closure_symbol]] = 1
-
-  return feature_matrix
-
-
-def get_feature_violation(df: pd.DataFrame, cnf: CNF) -> pd.DataFrame:
-  """
-  Get a mask of features that violate any constraints.
-
-  Args:
-      df (pd.DataFrame): The input dataframe.
-      cnf (CNF): CNF expression representing all constraints.
-
-  Returns:
-      pd.DataFrame: A mask of features that violate the constraints. (rows, features)
-  """
-  # Evaluate each clause in CNF and find variable closures
   clause_satisfaction = evaluate_clause_by_clause(df, cnf)
-  constraint_violation = ~clause_satisfaction
-
-  closures = find_constraint_closures(cnf)
-
-  # Convert closures mapping from symbols to indices
-  feature_violation_matrix = expand_constraints_to_features(
-    constraint_violation.values, cnf, closures
-  )
-
-  # Adjust matrix size if needed to match DataFrame columns
-  padded_feature_violation = np.pad(
-    feature_violation_matrix,
-    ((0, 0), (0, df.shape[1] - feature_violation_matrix.shape[1])),
-    mode="constant",
-  )
-
-  return pd.DataFrame(padded_feature_violation, columns=df.columns)
-
-
-
-def monte_carlo_hausdorff_measure(constraints: List[str]):
-  """Approximation of the hausdorff measure of an open geometry."""
-  points = np.random.uniform(-1e12, 1e12, (int(1e6), 100))
-
-  df_ = pd.DataFrame(points)
-  df_filtered = filter_by_constraints(df_, constraints)
-
-  return df_filtered.shape[0] / 1e6 * 100
+  clause_violation = ~clause_satisfaction
+  return clause_violation.apply(find_violating_features, axis=1)
 
 
 here = Path(__file__).parent
 tqdm.pandas()
-
 
 
 def extract_number(s: str) -> int:
@@ -178,8 +105,40 @@ def get_column_index(var: str, columns: pd.Index) -> int:
     return extract_number(var)
 
 
-def evaluate_constraints(df: pd.DataFrame, cnf: CNF) -> pd.Series:
-  """Evaluate the CNF expression on the DataFrame and return a mask of satisfaction."""
+# Global cache for CNF substitutions
+subs_cache = {}
+
+def get_cached_subs(combined_cnf, lambdify_dict):
+    """Cache CNF substitutions to avoid recomputation.
+    Workaround for multiple calls to the substitute function in CNF.
+    """
+    cnf_key = str(combined_cnf)  # Convert CNF expression to a unique key
+    
+    if cnf_key in subs_cache:
+        return subs_cache[cnf_key]  # Return cached substituted expression
+    
+    # Perform substitution (slow step)
+    substituted_cnf = combined_cnf.subs(lambdify_dict)
+    
+    # Store in cache
+    subs_cache[cnf_key] = substituted_cnf
+    return substituted_cnf
+
+
+
+def evaluate_constraints(df: pd.DataFrame, cnf: Union[CNF, str]) -> pd.Series:
+  """Evaluate the CNF expression on the DataFrame and return a mask of satisfaction.
+  args:
+    cnf (Union[CNF, str]): The CNF expression to evaluate. Can be a CNF object
+    or a string used by DataFrame.query().
+  """
+  if isinstance(cnf, str):
+    try:
+      # Return a mask of rows that satisfy the constraint
+      return df.index.isin(df.query(cnf).index)
+    except Exception as e:
+      raise ValueError(f"Invalid string constraint: {cnf}") from e
+  
   variables = list(set().union(*[clause.free_symbols for clause in cnf.clauses]))
   columns = df.columns
   variable_indices = {var: get_column_index(var, columns) for var in variables}
@@ -192,10 +151,11 @@ def evaluate_constraints(df: pd.DataFrame, cnf: CNF) -> pd.Series:
   # Combine all clauses into a single expression for evaluation
   combined_cnf = sp.And(*cnf.clauses)
 
+  substituted_cnf = get_cached_subs(combined_cnf, lambdify_dict)
   # Lambdify the combined CNF expression with NumPy as the module
   cnf_func = sp.lambdify(
     [lambdify_dict[var] for var in variables],
-    combined_cnf.subs(lambdify_dict),
+    substituted_cnf,
     modules="numpy",
   )
 
@@ -250,11 +210,13 @@ def deserialize_cnf(serialized_cnf: str) -> CNF:
   xs = [x for x in serialized_cnf.split("\n") if x]
   return CNF([sp.sympify(c) for c in xs])
 
+
 def read_constraints(dataset: str) -> CNF:
-  with open(here / f"../../data/constrained/{dataset}/constraints.sp") as f:
+  with open(here / f"data/constrained/{dataset}/constraints.sp") as f:
     constraints_str = f.read()
     cnf = deserialize_cnf(constraints_str)
   return cnf
+
 
 def encode_feature_violation(df: pd.DataFrame, cnf: CNF) -> pd.DataFrame:
   feature_violation = get_feature_violation(df, cnf)
