@@ -6,6 +6,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
 import numpy as np
 from typing import Dict, List
+import mlflow
 
 from deepod.models.tabular import DeepSVDD, REPEN, RDP, RCA, GOAD, NeuTraL, ICL, SLAD
 import matplotlib.pyplot as plt
@@ -23,6 +24,9 @@ from constraints import (
   evaluate_clause_by_clause,
 )
 
+
+# %%
+
 # download_all_data()
 
 logging.basicConfig()
@@ -32,8 +36,8 @@ logger.setLevel(logging.DEBUG)
 
 # dataset = "lcld_v2_iid"
 # dataset = "ctu_13_neris"
-# dataset = "url"
-dataset = "heloc_linear"
+dataset = "wids"
+# dataset = "heloc_linear"
 X, y = load_data(dataset, logger)
 cnf = read_constraints(dataset)
 X_down, y_down = downsample(X, y, frac=1)
@@ -43,6 +47,7 @@ X_down, y_down = downsample(X, y, frac=1)
 # is_valid = evaluate_constraints(X_down, cnf)
 # feature_violation = get_feature_violation(X_down, cnf)
 # clause_violation = ~evaluate_clause_by_clause(X_down, cnf)
+
 
 # %%
 if dataset == "lcld_v2_iid":
@@ -138,7 +143,6 @@ models = [
   SLAD(),
 ]
 
-
 # def anomaly_hist(anomaly_scores):
 #   fig, ax = plt.subplots()
 #   ax.hist(anomaly_scores, bins=30, color="blue", edgecolor="black")
@@ -148,73 +152,50 @@ models = [
 #   return fig
 
 
-# for model in models:
-model = models[2]
-model.fit(X_train)
-anomaly_scores = model.decision_function(X)
-
-#%%
-df_invalid_test
-
-#%%
-df_test_od = pd.DataFrame(X_test_od, columns=X.columns)
-y_ctr = evaluate_constraints(df_test_od, cnf)
-print("Constraint Violations in Combined Data:")
-print(y_ctr.value_counts(normalize=False))
-
-roc_auc = roc_auc_score(y_ctr, anomaly_scores)
-print(f"ROC AUC: {roc_auc:.4f}")
-
-print(
-  f"Exp: e53.1_deepod_6, Classifier: tabnet, Model: {model.__class__.__name__}, Dataset: {dataset}; Metrics: ROC AUC: {roc_auc:.4f}"
-)
-
-
-# %% Debug
-
-umap = UMAP(n_components=2)
-X_clean_umap = umap.fit_transform(X_train_od)
-X_adv_umap = umap.transform(X_adv_np)
-
-# plt.scatter(X_clean_umap[:, 0], X_clean_umap[:, 1], label="Clean Data", s=0.5)
-# plt.scatter(X_adv_umap[:, 0], X_adv_umap[:, 1], label="Adversarial Data", s=0.5)
-# plt.legend()
-
-# actually train umap on X_clean and X_adv_np
-X_combined_umap = umap.fit_transform(X_test_od)
-# plt.scatter(X_combined_umap[:, 0], X_combined_umap[:, 1], label="Combined Data", s=0.5)
-# plt.legend()
-
-# then color based on whether it's adversarial or not
-y_combined = np.zeros(X_test_od.shape[0])
-y_combined[X_train_od.shape[0] :] = 1
-color = np.where(y_combined == 0, "blue", "red")
-plt.scatter(X_combined_umap[:, 0], X_combined_umap[:, 1], c=color, s=0.3)
-plt.legend()
-
-
 # %%
+import os
+from load_dotenv import load_dotenv
 
-# Entrenar UMAP en los datos combinados
-X_combined_umap = umap.fit_transform(X_test_od)
+load_dotenv()
+experiment_name = "e53.1_deepod_7"
 
-# Normalizar las puntuaciones de anomalía para asignar colores
-norm = Normalize(vmin=min(anomaly_scores), vmax=max(anomaly_scores))
-anomaly_colors = cm.viridis(norm(anomaly_scores))  # Usar colormap 'viridis'
+for model in models:
+  # API says: put a damn numpy array!
+  model.fit(X_train.values)
+  df_test = pd.concat([df_invalid_test, X_test], axis=0)
 
-# Crear la visualización con colores basados en anomaly_scores
-plt.figure(figsize=(10, 7))
-plt.scatter(
-  X_combined_umap[:, 0],
-  X_combined_umap[:, 1],
-  c=anomaly_colors,  # Colorear en base a anomaly_scores
-  s=5,
-  label="Datos Combinados",
-)
-plt.colorbar(
-  cm.ScalarMappable(norm=norm, cmap="viridis"), label="Puntuación de Anomalía"
-)
-plt.title("Proyección UMAP con Puntuaciones de Anomalía")
-plt.xlabel("UMAP Dim 1")
-plt.ylabel("UMAP Dim 2")
-plt.show()
+  anomaly_scores = model.decision_function(df_test.values)
+
+  y_ctr = evaluate_constraints(df_test, cnf)
+  print("Constraint Violations in Combined Data:")
+  print(y_ctr.value_counts(normalize=False))
+
+  roc_auc = roc_auc_score(y_ctr, anomaly_scores)
+  print(f"ROC AUC: {roc_auc:.4f}")
+
+  print(
+    (
+      f"Exp: {experiment_name}, Classifier: tabnet, Model: {model.__class__.__name__},"
+      f" Dataset: {dataset}; Metrics: ROC AUC: {roc_auc:.4f}"
+    )
+  )
+
+  mlflow.set_tracking_uri(
+    (
+      f"http://{os.environ['MLFLOW_USERNAME']}:{os.environ['MLFLOW_PASSWORD']}-"
+      "@{os.environ['MLFLOW_ADDRESS']}"
+    )
+  )
+  mlflow.set_experiment(experiment_name)
+  with mlflow.start_run():
+    mlflow.log_params(
+      {
+        "model": model.__class__.__name__,
+        "dataset": dataset,
+      }
+    )
+    mlflow.log_metrics(
+      {
+        "roc_auc": roc_auc,
+      }
+    )
