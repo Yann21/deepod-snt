@@ -3,6 +3,8 @@ import pandas as pd
 import gdown
 from pathlib import Path
 import numpy as np
+import os
+import mlflow
 
 here = Path(__file__).parent
 
@@ -36,3 +38,15 @@ def dirac_mask(size, i):
   """
   # Fun trick where dirac in i is the ith row of the identity matrix.
   return np.eye(size)[i]
+
+
+def mlflow_log(experiment_name, params, metrics):
+  username = os.environ["MLFLOW_USERNAME"]
+  password = os.environ["MLFLOW_PASSWORD"]
+  address = os.environ["MLFLOW_ADDRESS"]
+  mlflow.set_tracking_uri(f"http://{username}:{password}@{address}")
+
+  mlflow.set_experiment(experiment_name)
+  with mlflow.start_run():
+    mlflow.log_params(params)
+    mlflow.log_metrics(metrics)

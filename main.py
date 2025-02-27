@@ -1,64 +1,37 @@
 # %% Import data
 import logging
-from constraints import read_constraints, evaluate_constraints
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
 import numpy as np
 from typing import Dict, List
-import mlflow
 
 from deepod.models.tabular import DeepSVDD, REPEN, RDP, RCA, GOAD, NeuTraL, ICL, SLAD
-import matplotlib.pyplot as plt
-from utils import load_data
-from umap import UMAP
-from matplotlib import cm
-from matplotlib.colors import Normalize
 from tqdm import tqdm
-from utils import downsample, dirac_mask
-from constraints import (
-  evaluate_constraints,
-  CNF,
-  get_variables_from_clauses,
-  get_feature_violation,
-  evaluate_clause_by_clause,
-)
+from utils import downsample, dirac_mask, mlflow_log
+from dotenv import load_dotenv
 
-
-# %%
-
-# download_all_data()
+from tabularbench.constraints.constraints_checker import ConstraintChecker
+from tabularbench.datasets import dataset_factory
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+# dataset_name = "ctu_13_neris"
+dataset_name = "lcld_v2_iid"
+dataset = dataset_factory.get_dataset(dataset_name)
+constraints_checker = ConstraintChecker(dataset.get_constraints(), tolerance=1e-3)
 
-# dataset = "lcld_v2_iid"
-# dataset = "ctu_13_neris"
-dataset = "wids"
-# dataset = "heloc_linear"
-X, y = load_data(dataset, logger)
-cnf = read_constraints(dataset)
-X_down, y_down = downsample(X, y, frac=1)
-
-
-# %%
-# is_valid = evaluate_constraints(X_down, cnf)
-# feature_violation = get_feature_violation(X_down, cnf)
-# clause_violation = ~evaluate_clause_by_clause(X_down, cnf)
-
-
-# %%
-if dataset == "lcld_v2_iid":
-  logger.info("Converting issue_d to int")
-  X_down["issue_d"] = pd.to_datetime(X_down["issue_d"]).astype("int")
-
+X, y = dataset.get_x_y()
+X_down, y_down = downsample(X, y, frac=0.1)
 X_train, X_test, y_train, y_test = train_test_split(
   X_down, y_down, test_size=0.2, random_state=42
 )
+#%%
+X_train.shape
 
-
+#%%
 def generate_noisy_attacks_by_features(
   X: pd.DataFrame, sigma: float = 1
 ) -> Dict[str, List[pd.DataFrame]]:
@@ -71,7 +44,7 @@ def generate_noisy_attacks_by_features(
   for i in tqdm(range(X.shape[1])):
     noise = np.random.multivariate_normal(mean, cov, X.shape[0])
     X_noisy = X + noise * dirac_mask(n_columns, i)
-    is_valid = evaluate_constraints(X_noisy, cnf)
+    is_valid = constraints_checker.check_constraints(X_noisy.values, X_noisy.values)
 
     X_valid = X_noisy[is_valid]
     X_invalid = X_noisy[~is_valid]
@@ -82,10 +55,12 @@ def generate_noisy_attacks_by_features(
   return data
 
 
+sigma = 1e3
+sigma
 logger.info("Generating noisy attacks on train set")
-data_train = generate_noisy_attacks_by_features(X_train)
+data_train = generate_noisy_attacks_by_features(X_train, sigma=sigma)
 logger.info("Generating noisy attacks on test set")
-data_test = generate_noisy_attacks_by_features(X_test)
+data_test = generate_noisy_attacks_by_features(X_test, sigma=sigma)
 
 val_inval_proportions = [
   [val.shape[0], inval.shape[0]]
@@ -95,7 +70,7 @@ df_viol = pd.DataFrame(val_inval_proportions, columns=["Valid", "Invalid"])
 
 df_viol.plot.bar(
   stacked=True,
-  title=f"Constraint Violation - {dataset}",
+  title=f"Constraint Violation - {dataset_name}",
   width=1,
   edgecolor="black",
   linewidth=0.1,
@@ -103,17 +78,11 @@ df_viol.plot.bar(
 )
 
 
-# %%
-df_invalid_test = pd.concat([x for x in data_test["invalid"]], axis=0)
-# df_valid_train = pd.concat([x for x in data_train["valid"]], axis=0)
-# df_valid_train = df_valid_train.sample(n=10000, replace=False)
-
-# print(f"Train valid: {df_valid_train.shape[0]}")
-print(f"Test invalid: {df_invalid_test.shape[0]}")
-
-
 # %% DeepOD step
-is_valid = evaluate_constraints(X_train, cnf)
+df_invalid_test = pd.concat([x for x in data_test["invalid"]], axis=0)
+logger.info(f"Test invalid: {df_invalid_test.shape[0]}")
+
+is_valid = constraints_checker.check_constraints(X_train.values, X_train.values)
 X_train_valid, X_train_invalid = X_train[is_valid], X_train[~is_valid]
 native_invalid_prop = X_train_invalid.shape[0] / X_train.shape[0] * 100
 
@@ -121,43 +90,22 @@ if native_invalid_prop > 10:
   logger.warning(
     f"Native invalid proportion: {native_invalid_prop:.2f}%. Goes against assumption that data is valid."
   )
-else:
-  logger.info(f"Native invalid proportion: {native_invalid_prop:.2f}%")
 
 
 # %%
-# Shuffle data for robustness
-# indices = np.arange(X_train_od.shape[0])
-# np.random.shuffle(indices)
-# X_train_od = X_train_od[indices]
-
-
 models = [
-  DeepSVDD(),
-  REPEN(),
-  RDP(),
+  # DeepSVDD(),
+  # RDP(),
   RCA(),
-  GOAD(),
-  NeuTraL(),
   ICL(),
   SLAD(),
+  # REPEN(), : Gets stuck
+  # GOAD(), : Gets stuck
+  # NeuTraL(), : CUDA issue
 ]
 
-# def anomaly_hist(anomaly_scores):
-#   fig, ax = plt.subplots()
-#   ax.hist(anomaly_scores, bins=30, color="blue", edgecolor="black")
-#   ax.set_title("Histogram of Anomaly Scores")
-#   ax.set_xlabel("Anomaly Score")
-#   ax.set_ylabel("Frequency")
-#   return fig
-
-
-# %%
-import os
-from load_dotenv import load_dotenv
-
 load_dotenv()
-experiment_name = "e53.1_deepod_7"
+experiment_name = "e53.1_deepod_8"
 
 for model in models:
   # API says: put a damn numpy array!
@@ -166,9 +114,11 @@ for model in models:
 
   anomaly_scores = model.decision_function(df_test.values)
 
-  y_ctr = evaluate_constraints(df_test, cnf)
+  y_ctr: np.ndarray = constraints_checker.check_constraints(
+    df_test.values, df_test.values
+  )
   print("Constraint Violations in Combined Data:")
-  print(y_ctr.value_counts(normalize=False))
+  print(np.unique(y_ctr, return_counts=True))
 
   roc_auc = roc_auc_score(y_ctr, anomaly_scores)
   print(f"ROC AUC: {roc_auc:.4f}")
@@ -176,26 +126,17 @@ for model in models:
   print(
     (
       f"Exp: {experiment_name}, Classifier: tabnet, Model: {model.__class__.__name__},"
-      f" Dataset: {dataset}; Metrics: ROC AUC: {roc_auc:.4f}"
+      f" Dataset: {dataset_name}; Metrics: ROC AUC: {roc_auc:.4f}"
     )
   )
 
-  mlflow.set_tracking_uri(
-    (
-      f"http://{os.environ['MLFLOW_USERNAME']}:{os.environ['MLFLOW_PASSWORD']}-"
-      "@{os.environ['MLFLOW_ADDRESS']}"
-    )
+  mlflow_log(
+    experiment_name,
+    params={
+      "model": model.__class__.__name__,
+      "dataset": dataset_name,
+      "perturbation": "random",
+      "sigma": sigma,
+    },
+    metrics={"roc_auc": roc_auc},
   )
-  mlflow.set_experiment(experiment_name)
-  with mlflow.start_run():
-    mlflow.log_params(
-      {
-        "model": model.__class__.__name__,
-        "dataset": dataset,
-      }
-    )
-    mlflow.log_metrics(
-      {
-        "roc_auc": roc_auc,
-      }
-    )
