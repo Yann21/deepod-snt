@@ -50,3 +50,21 @@ def mlflow_log(experiment_name, params, metrics):
   with mlflow.start_run():
     mlflow.log_params(params)
     mlflow.log_metrics(metrics)
+
+import logging
+
+def create_loger():
+  logging.basicConfig()
+  logger = logging.getLogger(__name__)
+  logger.setLevel(logging.DEBUG)
+  return logger
+
+def confirm_base_data_is_valid(constraints_checker, X_train, logger):
+  is_valid = constraints_checker.check_constraints(X_train.values, X_train.values)
+  X_train_valid, X_train_invalid = X_train[is_valid], X_train[~is_valid]
+  native_invalid_prop = X_train_invalid.shape[0] / X_train.shape[0] * 100
+
+  if native_invalid_prop > 5:
+    logger.warning(
+      f"Native invalid proportion: {native_invalid_prop:.2f}%. Goes against assumption that data is valid."
+    )
