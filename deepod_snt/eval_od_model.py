@@ -8,17 +8,22 @@ from factories import AnomalyDetectorFactory
 
 from viz import plot_constraint_violation_by_feature
 from tqdm import tqdm
-from utils import downsample, dirac_mask, mlflow_log, confirm_base_data_is_valid
+from deepod_snt.utils.utils import (
+  downsample,
+  dirac_mask,
+  mlflow_log,
+  confirm_base_data_is_valid,
+  create_logger,
+)
 from dotenv import load_dotenv
 
 from tabularbench.constraints.constraints_checker import ConstraintChecker
 from tabularbench.datasets import dataset_factory
-from utils import create_loger
 from sklearn.preprocessing import StandardScaler
 
 load_dotenv()
 
-logger = create_loger()
+logger = create_logger()
 
 
 def generate_noisy_attacks_by_features(
@@ -48,9 +53,9 @@ def generate_noisy_attacks_by_features(
 debug = False
 experiment_name = "e53.1_deepod_9"
 models = [
-  "autoencoder",
+  # "autoencoder",
   "oneclasssvm",
-  "isolationforest",
+  # "isolationforest",
   # "deepsvdd",
   # "rdp",
   # "rca",
@@ -64,7 +69,7 @@ dataset_names = [
   # "ctu_13_neris",
   "lcld_v2_iid",
 ]
-sigmas = [1e3]
+sigmas = [1e0, 1e3]
 sample = 0.1
 
 for dataset_name, sigma in zip(dataset_names, sigmas):
@@ -95,7 +100,7 @@ for dataset_name, sigma in zip(dataset_names, sigmas):
   for model in models:
     params = {}
     if model == "oneclasssvm":
-      params["kernel"] = "linear"
+      params["kernel"] = "rbf"
     model = AnomalyDetectorFactory.create(model, **params)
 
     if model == "autoencoder":
@@ -138,20 +143,3 @@ for dataset_name, sigma in zip(dataset_names, sigmas):
     #   },
     #   metrics={"roc_auc": roc_auc},
     # )
-
-
-# %%
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-sns.histplot(
-  anomaly_scores[y_is_invalid == 1], label="Valid", color="blue", kde=True, alpha=0.5
-)
-sns.histplot(
-  anomaly_scores[y_is_invalid == 0], label="Invalid", color="red", kde=True, alpha=0.5
-)
-plt.legend()
-plt.xlabel("Anomaly Score")
-plt.ylabel("Density")
-plt.title("Distribution of Anomaly Scores")
-plt.show()

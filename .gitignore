@@ -8,6 +8,7 @@ __pycache__/
 *$py.class
 
 data/*
+deepod_snt/data/*
 
 # C extensions
 *.so

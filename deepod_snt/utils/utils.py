@@ -1,17 +1,12 @@
 # %%
 import pandas as pd
-import gdown
 from pathlib import Path
 import numpy as np
 import os
 import mlflow
+import logging
 
 here = Path(__file__).parent
-
-
-def download_all_data() -> None:
-  folder = "https://drive.google.com/drive/folders/12xtPwtW5sZUxe_hxWKG-U_zdNwuYbF8q?usp=drive_link"
-  gdown.download_folder(folder)
 
 
 def load_data(dataset, logger):
@@ -51,13 +46,13 @@ def mlflow_log(experiment_name, params, metrics):
     mlflow.log_params(params)
     mlflow.log_metrics(metrics)
 
-import logging
 
-def create_loger():
+def create_logger():
   logging.basicConfig()
   logger = logging.getLogger(__name__)
   logger.setLevel(logging.DEBUG)
   return logger
+
 
 def confirm_base_data_is_valid(constraints_checker, X_train, logger):
   is_valid = constraints_checker.check_constraints(X_train.values, X_train.values)

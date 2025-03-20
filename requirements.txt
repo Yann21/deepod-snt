@@ -1,4 +1,3 @@
-gdown
 pandas
 numpy
 sympy
