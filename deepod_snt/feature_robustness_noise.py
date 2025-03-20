@@ -3,7 +3,7 @@ import logging
 import pandas as pd
 from sklearn.model_selection import train_test_split
 import numpy as np
-from utils import downsample, dirac_mask
+from deepod_snt.utils.utils import downsample, dirac_mask
 import seaborn as sns
 
 import matplotlib.pyplot as plt
@@ -26,7 +26,7 @@ constraints_checker = ConstraintChecker(dataset.get_constraints(), tolerance=1e-
 
 
 def generate_noisy_attacks(
-  X: pd.DataFrame, sigma_levels: np.ndarray, pairwise: bool
+  X: pd.DataFrame, sigma_levels: np.ndarray, pairwise: bool, correlated: bool = False
 ) -> np.ndarray:
   """
   Generate noisy attacks feature-wise or pairwise. Return the percentage of
@@ -54,15 +54,17 @@ def generate_noisy_attacks(
   for j, sigma in enumerate(
     tqdm(sigma_levels, desc="Processing noise levels (10-20min)")
   ):
-    cov = sigma * np.eye(n_columns) * stds  # Start with diagonal covariance
+    cov = sigma * np.eye(n_columns) * (stds**2)  # Start with diagonal covariance
 
     for i in range(n_columns):
       if pairwise:
         for k in range(i, n_columns):  # Compute only upper triangular part
           cov_pairwise = cov.copy()
-          if i != k:
-            # Have perfect correlation between i and k
-            cov_pairwise[i, k] = cov_pairwise[k, i] = stds[i] * stds[k]
+
+          if correlated:
+            if i != k:
+              # Have perfect correlation between i and k
+              cov_pairwise[i, k] = cov_pairwise[k, i] = stds[i] * stds[k]
 
           noise = np.random.multivariate_normal(mean, cov_pairwise, X.shape[0])
           # Add noise on both feature i and k
@@ -90,7 +92,9 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 sigma_levels = np.logspace(-5, 5, num=11, base=10)
 
-invalidity_percentages = generate_noisy_attacks(X_train, sigma_levels, pairwise=True)
+invalidity_percentages = generate_noisy_attacks(
+  X_train, sigma_levels, pairwise=True, correlated=False
+)
 distance_to_50 = np.abs(invalidity_percentages - 50)
 std_closest_to_50 = np.argmin(distance_to_50, axis=0)
 # std_closest_to_50 = closest_to_50.idxmin(axis=0)
