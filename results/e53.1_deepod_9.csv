@@ -1,0 +1,38 @@
+,params.dataset,params.debug,params.model,params.perturbation,params.sigma,metrics.roc_auc
+0,lcld_v2_iid,False,IsolationForest(),random,1.0,0.4768615094792435
+1,lcld_v2_iid,False,OneClassSVM(kernel='linear'),random,1.0,0.49770154688003765
+2,lcld_v2_iid,False,"AutoEncoder(batch_norm=True, batch_size=32, compile_mode='default',
+      contamination=0.1, device=device(type='cuda', index=0),
+      dropout_rate=0.2, epoch_num=10, hidden_activation_name='relu',
+      hidden_neuron_list=[64, 32], lr=0.001, optimizer_name='adam',
+      optimizer_params={'weight_decay': 1e-05}, preprocessing=True,
+      random_state=42, use_compile=False, verbose=1)",random,1.0,0.6117213544095026
+3,lcld_v2_iid,True,IsolationForest(),random,1000.0,0.41557610962605196
+4,lcld_v2_iid,True,OneClassSVM(kernel='linear'),random,1000.0,0.4989892637762469
+5,lcld_v2_iid,True,"AutoEncoder(batch_norm=True, batch_size=32, compile_mode='default',
+      contamination=0.1, device=device(type='cuda', index=0),
+      dropout_rate=0.2, epoch_num=10, hidden_activation_name='relu',
+      hidden_neuron_list=[64, 32], lr=0.001, optimizer_name='adam',
+      optimizer_params={'weight_decay': 1e-05}, preprocessing=True,
+      random_state=42, use_compile=False, verbose=1)",random,1000.0,0.9041977821485967
+6,ctu_13_neris,True,IsolationForest(),random,1.0,0.49654533334010154
+7,ctu_13_neris,True,OneClassSVM(kernel='linear'),random,1.0,0.4999255741701787
+8,ctu_13_neris,True,"AutoEncoder(batch_norm=True, batch_size=32, compile_mode='default',
+      contamination=0.1, device=device(type='cuda', index=0),
+      dropout_rate=0.2, epoch_num=10, hidden_activation_name='relu',
+      hidden_neuron_list=[64, 32], lr=0.001, optimizer_name='adam',
+      optimizer_params={'weight_decay': 1e-05}, preprocessing=True,
+      random_state=42, use_compile=False, verbose=1)",random,1.0,0.7122115745937954
+9,lcld_v2_iid,True,"AutoEncoder(batch_norm=True, batch_size=32, compile_mode='default',
+      contamination=0.1, device=device(type='cuda', index=0),
+      dropout_rate=0.2, epoch_num=10, hidden_activation_name='relu',
+      hidden_neuron_list=[64, 32], lr=0.001, optimizer_name='adam',
+      optimizer_params={'weight_decay': 1e-05}, preprocessing=True,
+      random_state=42, use_compile=False, verbose=1)",random,1.0,0.6079206626375714
+10,lcld_v2_iid,True,IsolationForest(),random,1.0,0.47605797016342055
+11,lcld_v2_iid,True,"AutoEncoder(batch_norm=True, batch_size=32, compile_mode='default',
+      contamination=0.1, device=device(type='cuda', index=0),
+      dropout_rate=0.2, epoch_num=10, hidden_activation_name='relu',
+      hidden_neuron_list=[64, 32], lr=0.001, optimizer_name='adam',
+      optimizer_params={'weight_decay': 1e-05}, preprocessing=True,
+      random_state=42, use_compile=False, verbose=1)",random,1.0,0.6079206626375714

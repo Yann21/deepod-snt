@@ -1,0 +1,14 @@
+,params.dataset,params.model,params.perturbation,params.sigma,metrics.roc_auc
+0,ctu_13_neris,ICL,random,1000.0,0.4910704802826772
+1,ctu_13_neris,RCA,random,1000.0,0.48344519363064853
+2,ctu_13_neris,ICL,random,1.0,0.4976301720722263
+3,ctu_13_neris,RCA,random,1.0,0.4867862322152954
+4,lcld_v2_iid,ICL,random,1000.0,0.1295830867287257
+5,lcld_v2_iid,RCA,random,1000.0,0.5000618690987599
+6,lcld_v2_iid,RDP,random,1000.0,0.4900894128743477
+7,lcld_v2_iid,DeepSVDD,random,1000.0,0.34576846436081393
+8,lcld_v2_iid,DeepSVDD,random,1,0.49864148971538047
+9,lcld_v2_iid,SLAD,random,1,0.499445983978058
+10,lcld_v2_iid,ICL,random,1,0.37489847616449434
+11,lcld_v2_iid,RCA,random,1,0.501492232697571
+12,lcld_v2_iid,RDP,random,1,0.49982219942884637

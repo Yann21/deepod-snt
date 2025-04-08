@@ -1,0 +1,9 @@
+,params.classifier,params.dataset,params.model,metrics.roc_auc
+0,tabnet,url,SLAD,0.9490751504651157
+1,tabnet,url,ICL,0.0
+2,tabnet,url,NeuTraL,0.0
+3,tabnet,url,GOAD,0.38951695110180345
+4,tabnet,url,RCA,0.9950429082956931
+5,tabnet,url,RDP,0.9996288603688319
+6,tabnet,url,REPEN,0.9996681845215543
+7,tabnet,url,DeepSVDD,0.11150731869364973
